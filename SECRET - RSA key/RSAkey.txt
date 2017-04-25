@@ -1,0 +1,17 @@
+RSA
+
+p = 11
+q = 13
+
+pq = 143
+
+lcm(10, 12) = 60
+ 
+1 < e < 60
+e = 7
+d = 43
+
+d*e =_ 1 (mod 60)
+
+encryption:   (m1)^e  mod(143) ->  m2 sent.
+decryption: (m2)^d mod(143) -> m1 recieved.
