@@ -1,0 +1,16 @@
+goal: first 127 ascii characters.
+
+RSA:
+p = 17
+q = 11
+n = p*q = 187 = resolution >127 && <255 = good!
+
+lcm(p-1, q-1) = lcm(10, 12) = 80
+
+0 < e < 80 
+e = 23	coprime with 80
+d*e mod(80) = 1 => d coprime with 80
+d = 7
+
+modified message ^ e % 187 = cipher
+cipher ^ d % 187 = modified message
