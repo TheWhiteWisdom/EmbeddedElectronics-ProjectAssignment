@@ -1,40 +1,44 @@
 
 #include "16F84.h"
-int* passPhrases;
-char ID= 54;
-char passPhrase= 43;
+#pragma config |= 0x3ff1
+char ID;
+char passPhrase;
 
 /* Function prototype*/
+void initialize();
 void communicationSequence();
 char modPow(char in_value , int pow, char mod);
 void putchar( char d_out );
 char getchar( void );
 
-
 void main(){
+	initialize();
 	while(1){
-		communicationSequence();
+
+		//communicationSequence();
 	}
 }
-
+void initialize(){
+	ID = 54;
+	passPhrase = 43;
+	
+	PORTB.7 = 1;
+	TRISB.7 = 1;
+}
 void communicationSequence()
 {
   putchar(ID);
   char receivedChar = getchar();
   if(receivedChar==10)
-    while(1)
-      nop;
+    while(1){
+    }
   receivedChar-=20;
   putchar(passPhrase);
   receivedChar= getchar();
   if(receivedChar==10)
-    while(1)
-      nop;
+    while(1){}
     else if(receivedChar==11)
-      while(1)
-        nop;
-
-
+      while(1){}
 }
 
 //used for encryption and decryption
@@ -104,4 +108,5 @@ char getchar( void )  /* recieves one char */
         ti = 30; do ; while( --ti > 0); nop();  
         }
    return modPow(d_in, 7, 143);
-}
+
+  }

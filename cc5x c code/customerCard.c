@@ -1,48 +1,55 @@
 
 #include "16F84.h"
-int* passPhrases;
-char ID= 87;
-char passPhrase= 43;
-char nAccess =0;
+#pragma config |= 0x3ff1
+char ID;
+char passPhrase;
+char nAccess;
 /* Function prototype*/
+void initialize();
 void communicationSequence();
 char modPow(char in_value , int pow, char mod);
 void putchar( char d_out );
 char getchar( void );
-
+void puts_eedata( char c, char address );
+char gets_eedata( char address );
 
 
 void main(){
+	initialize();
 	while(1){
 		communicationSequence();
 	}
 }
 
+void initialize(){
+	nAccess = gets_eedata(0x01);
+	ID = 54;
+	passPhrase = 43;
+}
+
+/* used for communication*/
 void communicationSequence()
 {
-  putchar(customerID);
+  putchar(ID);
   char receivedChar = getchar();
   receivedChar-=20;
   putchar(passPhrase);
   receivedChar= getchar();
   if(receivedChar==10)
-    while(1)
-      nop;
+    while(1){}
     else if(receivedChar==2)
     {
       putchar(nAccess);
       if(receivedChar==10)
-          while(1)
-              nop;
+          while(1){}
       else if(receivedChar==11)
-                while(1)
-                  nop;      
+                while(1){}
     }
-    else if(receivedChar==12)
-      nAccess+=5;
-        while(1)
-          nop;
-
+    else if(receivedChar==12){
+		nAccess+=5;
+		puts_eedata(nAccess, 0x01);
+        while(1){}
+	}
 }
 
 //used for encryption and decryption
@@ -112,4 +119,28 @@ char getchar( void )  /* recieves one char */
         ti = 30; do ; while( --ti > 0); nop();  
         }
    return modPow(d_in, 7, 143);
+}
+
+void puts_eedata( char c, char address ){
+/* Put char in EEPROM-data on specified address */
+      /* Write EEPROM-data sequence                          */
+      EEADR = address;          /* EEPROM-data adress 0x00 => 0x40 */ 
+      EEDATA = c;         /* data to be written              */
+      WREN = 1;           /* write enable                    */
+      EECON2 = 0x55;      /* first Byte in comandsequence    */
+      EECON2 = 0xAA;      /* second Byte in comandsequence   */
+      WR = 1;             /* write begin                     */
+      while( EEIF == 0) ; /* wait for done ( EEIF=1 )        */
+      WR = 0;             /* write done                      */
+      WREN = 0;           /* write disable - safety first    */
+      EEIF = 0;           /* Reset EEIF bit in software      */  
+}
+
+char gets_eedata(char address){
+	/* Start of read EEPROM-data sequence                */
+      EEADR = address;       /* EEPROM-data adress 0x00 => 0x40  */ 
+      RD = 1;          /* Read                             */
+      char ret_char = EEDATA;   /* data to be read                  */
+      RD = 0;
+	  return ret_char;
 }
