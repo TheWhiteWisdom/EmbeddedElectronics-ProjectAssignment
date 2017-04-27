@@ -12,7 +12,7 @@
 /* 'Static' values */
 #define RSA_key 17
 #define RSA_mod 187
-#define MAX_STRING 11
+#define MAX_STRING_SIZE 11
 #define NMBR_PHRASE 3
 #define Cmd_accessGranted 0x01
 #define Cmd_accessDenied 0x02
@@ -27,8 +27,11 @@ void initializePhrases(void);
 void initializeSerial(void);
 void run(void);
 void incrementPhraseRequestNumber(void);
+char modpow(char val, char mod, char pow);
+char getAmountFromUART();
 
 /* Borrowed and modified method's headers */
+bit check_password( char * input_string, const char * candidate_string );
 void putcharUART( char );
 char getcharUART( void );
 void string_outUART( const char * string ); 
@@ -38,13 +41,11 @@ char getcharCARD( void );
 void string_outCARD( const char * string ); 
 void string_inCARD( char * );
 void printf(const char * string, char variable); 
-void delay( char );
+void delay10( char );
 
 /* Variables that simulates data from database */
 char userID;
 char superID;
-char*** superPassPhrasesPointer;
-char*** userPassPhrasesPointer;
 
 /* Other variables */
 char phraseRequestNumber;
@@ -52,11 +53,6 @@ bit refillModeEnabled;
 char refillAmount;
 
 void main(){
-    char** superPassPhrases[MAX_STRING][NMBR_PHRASE];
-    *superPassPhrasesPointer = superPassPhrases;
-    char** userPassPhrases[MAX_STRING][NMBR_PHRASE];
-    *userPassPhrasesPointer = userPassPhrases;
-    
     userID = 42;
     superID = 53;
     
@@ -64,21 +60,10 @@ void main(){
     refillModeEnabled = 0;
     refillAmount = 0;
     
-    initializePhrases();
     initializeSerial();
     while(1){
         run();
     }
-}
-
-void initializePhrases(){
-    (*superPassPhrasesPointer)[0] = "sPhrase0";
-    (*superPassPhrasesPointer)[1] = "sPhrase1";
-    (*superPassPhrasesPointer)[2] = "sPhrase2";
-    
-    (*userPassPhrasesPointer)[0] = "uPhrase0";
-    (*userPassPhrasesPointer)[1] = "uPhrase1";
-    (*userPassPhrasesPointer)[2] = "uPhrase2";
 }
 
 void initializeSerial(){
@@ -96,6 +81,35 @@ void initializeSerial(){
         TRISC.2 = 1; // RC2 input, Card present bit
 }
 
+bit comparePhrase(char* in_phrase, bit userPhrase, char index){
+    if(userPhrase){
+        switch(index){
+            case 0:
+                return check_password(in_phrase, "uPhrase0");
+                break;
+            case 1:
+                return check_password(in_phrase, "uPhrase1");
+                break;
+            case 2:
+                return check_password(in_phrase, "uPhrase2");
+                break;
+        }
+    }else{
+        switch(index){
+            case 0:
+                return check_password(in_phrase, "sPhrase0");
+                break;
+            case 1:
+                return check_password(in_phrase, "sPhrase1");
+                break;
+            case 2:
+                return check_password(in_phrase, "sPhrase2");
+                break;
+        }
+    }
+	return 0;
+}
+
 void run(){
     if(PORTC.2 == 1){
         string_outUART("Remove card\r\n");
@@ -110,19 +124,19 @@ void run(){
     while(PORTC.2 == 0)nop();// wait for card to be present
     putcharCARD(Cmd_getID);
     char ID = getcharCARD();
-    switch(ID){
-        case userID:
+    if(ID == userID){
             if(!refillModeEnabled){
                 string_outUART("User card detected!\r\n");
                 putcharCARD(Cmd_getPassPhrase+phraseRequestNumber);
-                char phrase = getcharCARD();
-                char correctPhrase = (*userPassPhrasesPointer)[phraseRequestNumber]
-                incrementPhraseRequestNumber();
-                if(phrase != correctPhrase){
+				char phrase[MAX_STRING_SIZE];
+                string_inCARD(phrase);
+                if(!comparePhrase(phrase, 0, phraseRequestNumber)){
                     putcharCARD(Cmd_accessDenied);
                     string_outUART("ERROR: invalid card!\r\n");
+                    incrementPhraseRequestNumber();
                     return;
                 }
+                incrementPhraseRequestNumber();
                 putcharCARD(Cmd_getNmbrAccesses);
                 char nmbrAccesses = getcharCARD();
                 if(nmbrAccesses <= 0){
@@ -138,10 +152,10 @@ void run(){
             else{
                 string_outUART("User card detected!\r\n");
                 putcharCARD(Cmd_getPassPhrase+phraseRequestNumber);
-                char phrase = getcharCARD();
-                char correctPhrase = (*userPassPhrasesPointer)[phraseRequestNumber]
-                incrementPhraseRequestNumber();
-                if(phrase != correctPhrase){
+                char phrase[MAX_STRING_SIZE];
+                string_inCARD(phrase);
+                if(!comparePhrase(phrase, 0, phraseRequestNumber)){
+                    putcharCARD(Cmd_accessDenied);
                     putcharCARD(Cmd_accessDenied);
                     string_outUART("ERROR: invalid card!\r\n");
                     refillAmount = 0;
@@ -150,37 +164,35 @@ void run(){
                 }
                 printf("Granted! Adding %d accesses ...\r\n",refillAmount);
                 putcharCARD(Cmd_accessGranted);
-                delay(50);
+                delay10(50);
                 putcharCARD(Cmd_loadCard + refillAmount);
-                delay(50);
+                delay10(50);
                 putcharCARD(Cmd_getNmbrAccesses);
                 char nmbrAccesses = getcharCARD();
                 printf("Done! Accesses left: %d\r\n",nmbrAccesses);
                 delay10(200);
             }
-            break;
-        case superID:
+	}else if(ID == superID){
             string_outUART("Super card detected!\r\n");
             putcharCARD(Cmd_getPassPhrase+phraseRequestNumber);
-            char phrase = getcharCARD();
-            char correctPhrase = (*superPassPhrasesPointer)[phraseRequestNumber]
-            incrementPhraseRequestNumber();
-            if(phrase != correctPhrase){
+            char phrase[MAX_STRING_SIZE];
+                string_inCARD(phrase);
+            if(!comparePhrase(phrase, 0, phraseRequestNumber)){
                 putcharCARD(Cmd_accessDenied);
                 string_outUART("ERROR: invalid card!\r\n");
                 refillAmount = 0;
                 refillModeEnabled = 0;
+                incrementPhraseRequestNumber();
                 return;
             }
+            incrementPhraseRequestNumber();
             putcharCARD(Cmd_accessGranted);
             string_outUART("Granted!\r\n");
             char refillAmount = getAmountFromUART();
             if(refillAmount==0)
                 refillModeEnabled=0;
-            break;
-        default:
+     }else{
             string_outUART("ERROR: invalid card!\r\n");
-            break;
     }     
 }
 
@@ -188,9 +200,9 @@ void incrementPhraseRequestNumber(){
     phraseRequestNumber = modpow(phraseRequestNumber + 1, NMBR_PHRASE, 1);
 }
 
-modpow(char val, char mod, char pow){
+char modpow(char val, char mod, char pow){
     char ret_char = 1;
-    for(mod; mod > 0; mod--){
+    for(mod = mod; mod > 0; mod--){
         ret_char = ret_char * val;
         /* Simple and fast char modulo */
         while(ret_char >= mod){
@@ -205,13 +217,13 @@ char RSAcryptation(char c){
 }
 
 char getAmountFromUART(){
+	char value = 0;
     while(1){
         string_outUART("Insert amount to refill: ");
-        char input_string[MAX_STRING];
+        char input_string[MAX_STRING_SIZE];
         string_inUART( &input_string[0] );
         string_outUART("\r\n");
         
-        char value = 0;
         int i;
         for(i=0; i < 4; i++){
             if(i == 0 && input_string[i] == '-')
@@ -227,7 +239,7 @@ char getAmountFromUART(){
             else
                 value += digit;
         }
-        string_outUART("Must be numeric between -99 and 99! \r\n")
+        string_outUART("Must be numeric between -99 and 99! \r\n");
     }
     return value;
 }
@@ -241,6 +253,19 @@ char getAmountFromUART(){
         |       |       |       |       |       |       |       |       |
         V      V      V       V      V      V       V      V       V
     *********************************************** */
+    
+bit check_password( char * input_string, const char * candidate_string )
+{
+   /* compares input buffer with the candidate string */
+   char i, c, d;
+   for(i=0; ; i++)
+     {
+       c = input_string[i];
+       d = candidate_string[i];
+       if(d != c ) return 0;       /* no match    */
+         if( d == '\0' ) return 1; /* exact match */
+     }
+}
     
 void putcharUART( char ch )  /* sends one char */
 {
@@ -332,7 +357,7 @@ void string_inUART( char * string )
          c = getcharUART( );           /* input 1 character     */
          string[charCount] = c;    /* store the character   */
          putcharUART( c );             /* echo the character    */
-         if( (charCount == (MAX_STRING-1))||(c=='\r' )) /* end of input */
+         if( (charCount == (MAX_STRING_SIZE-1))||(c=='\r' )) /* end of input */
            {
              string[charCount] = '\0'; /* add "end of string"      */
              return;
@@ -360,7 +385,7 @@ void string_inCARD( char * string )
          c = getcharCARD( );           /* input 1 character     */
          string[charCount] = c;    /* store the character   */
          putcharCARD( c );             /* echo the character    */
-         if( (charCount == (MAX_STRING-1))||(c=='\r' )) /* end of input */
+         if( (charCount == (MAX_STRING_SIZE-1))||(c=='\r' )) /* end of input */
            {
              string[charCount] = '\0'; /* add "end of string"      */
              return;

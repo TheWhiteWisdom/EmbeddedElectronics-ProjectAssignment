@@ -18,37 +18,27 @@
 #define Cmd_loadCard 0x100  // + amount of accesses
 
 /* Method headers */
-void initializePhrases(void);
 void initializeSerial(void);
 void run(void);
+char modpow(char,char,char);
 
 /* Borrowed and modified method's headers */
 void putchar( char );
 char getchar( void );
 void string_out( const char * string ); 
 void string_in( char * );
+char gets_eedata(char);
+void puts_eedata(char, char);
 
 char id;
-char*** passPhrasesPointer;
 
 void main(){
-    char** passPhrases[MAX_STRING][NMBR_PHRASE];
-    *passPhrasesPointer = passPhrases;
-    
     id = 53;
     
-    initializePhrases();
     initializeSerial();
     while(1){
         run();
     }
-}
-
-
-void initializePhrases(){
-    (*passPhrasesPointer)[0] = "sPhrase0";
-    (*passPhrasesPointer)[1] = "sPhrase1";
-    (*passPhrasesPointer)[2] = "sPhrase2";
 }
 
 void initializeSerial(){
@@ -57,13 +47,29 @@ void initializeSerial(){
         // RB7 I/O port. TRISB.7 set at putchar and getchar
 }
 
+void sendPhrase(char index){
+    switch(index){
+        case 0:
+            string_out("sPhrase0");
+            break;
+        case 1:
+            string_out("sPhrase1");
+            break;
+        case 2:
+            string_out("sPhrase2");
+            break;
+        default:
+            putchar(0);
+    }
+}
+
 void run(){    
     while(1){
         char command = getchar();
         if(command > Cmd_getPassPhrase){
             if(command-Cmd_getPassPhrase > NMBR_PHRASE || command-Cmd_getPassPhrase < 0)
                 return;
-            string_out((*passPhrasesPointer)[command-Cmd_getPassPhrase]);
+            sendPhrase(command-Cmd_getPassPhrase);
             continue;
         }
         switch(command){
@@ -82,9 +88,9 @@ void run(){
     }
 }
 
-modpow(char val, char mod, char pow){
+char modpow(char val, char mod, char pow){
     char ret_char = 1;
-    for(mod; mod > 0; mod--){
+    for(mod=mod; mod > 0; mod--){
         ret_char = ret_char * val;
         /* Simple and fast char modulo */
         while(ret_char >= mod){
@@ -181,4 +187,28 @@ void string_out(const char * string)
      putchar(k); 
    }
   return;
+}
+
+void puts_eedata( char c, char address ){
+/* Put char in EEPROM-data on specified address */
+      /* Write EEPROM-data sequence                          */
+      EEADR = address;          /* EEPROM-data adress 0x00 => 0x40 */ 
+      EEDATA = c;         /* data to be written              */
+      WREN = 1;           /* write enable                    */
+      EECON2 = 0x55;      /* first Byte in comandsequence    */
+      EECON2 = 0xAA;      /* second Byte in comandsequence   */
+      WR = 1;             /* write begin                     */
+      while( EEIF == 0) ; /* wait for done ( EEIF=1 )        */
+      WR = 0;             /* write done                      */
+      WREN = 0;           /* write disable - safety first    */
+      EEIF = 0;           /* Reset EEIF bit in software      */  
+}
+
+char gets_eedata(char address){
+	/* Start of read EEPROM-data sequence                */
+      EEADR = address;       /* EEPROM-data adress 0x00 => 0x40  */ 
+      RD = 1;          /* Read                             */
+      char ret_char = EEDATA;   /* data to be read                  */
+      RD = 0;
+	  return ret_char;
 }

@@ -18,45 +18,51 @@
 #define Cmd_loadCard 0x100  // + amount of accesses
 
 /* Method headers */
-void initializePhrases(void);
 void initializeSerial(void);
 void run(void);
+char modpow(char,char,char);
 
 /* Borrowed and modified method's headers */
 void putchar( char );
 char getchar( void );
 void string_out( const char * string ); 
 void string_in( char * );
+char gets_eedata(char);
+void puts_eedata(char, char);
 
 char id;
-char*** passPhrasesPointer;
 char accessesAddress;
 
 void main(){
-    char** passPhrases[MAX_STRING][NMBR_PHRASE];
-    *passPhrasesPointer = passPhrases;
-    
     id = 42;
     accessesAddress = 14;
     
-    initializePhrases();
     initializeSerial();
     while(1){
         run();
     }
 }
 
-
-void initializePhrases(){
-    (*passPhrasesPointer)[0] = "uPhrase0";
-    (*passPhrasesPointer)[1] = "uPhrase1";
-    (*passPhrasesPointer)[2] = "uPhrase2";
-}
-
 void initializeSerial(){
     /* READER */
         PORTB.7 = 1; // marking line
         // RB7 I/O port. TRISB.7 set at putchar and getchar
+}
+
+void sendPhrase(char index){
+    switch(index){
+        case 0:
+            string_out("uPhrase0");
+            break;
+        case 1:
+            string_out("uPhrase1");
+            break;
+        case 2:
+            string_out("uPhrase2");
+            break;
+        default:
+            putchar(0);
+    }
 }
 
 void run(){    
@@ -72,7 +78,7 @@ void run(){
         if(command > Cmd_getPassPhrase){
             if(command-Cmd_getPassPhrase > NMBR_PHRASE || command-Cmd_getPassPhrase < 0)
                 return;
-            string_out((*passPhrasesPointer)[command-Cmd_getPassPhrase]);
+            sendPhrase(command-Cmd_getPassPhrase);
             continue;
         }
         switch(command){
@@ -98,9 +104,9 @@ void run(){
     }
 }
 
-modpow(char val, char mod, char pow){
+char modpow(char val, char mod, char pow){
     char ret_char = 1;
-    for(mod; mod > 0; mod--){
+    for(mod=mod; mod > 0; mod--){
         ret_char = ret_char * val;
         /* Simple and fast char modulo */
         while(ret_char >= mod){
