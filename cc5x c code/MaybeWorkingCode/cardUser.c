@@ -72,7 +72,7 @@ void run(){
         if(command > Cmd_getPassPhrase){
             if(command-Cmd_getPassPhrase > NMBR_PHRASE || command-Cmd_getPassPhrase < 0)
                 return;
-            putchar((*passPhrasesPointer)[command-Cmd_getPassPhrase]);
+            string_out((*passPhrasesPointer)[command-Cmd_getPassPhrase]);
             continue;
         }
         switch(command){
