@@ -34,7 +34,7 @@ char id;
 char accessesAddress;
 
 void main(){
-    id = 42;
+    id = 'u';
     accessesAddress = 14;
     
     initializeSerial();
@@ -117,7 +117,7 @@ char modpow(char val, char mod, char pow){
 }
 
 char RSAcryptation(char c){
-    return modpow(c, RSA_mod, RSA_key);
+    return c; // modpow(c, RSA_mod, RSA_key);
 }
 
 /* ***********************************************
@@ -135,19 +135,20 @@ char RSAcryptation(char c){
     ********************************************* */
 void putchar( char ch )  /* sends one char */
 {
-  TRISB.7 = 0;
   char cipher = RSAcryptation(ch);
   char bitCount, ti;
+  TRISB.7 = 0;
   PORTB.7 = 0; /* set startbit */
   for ( bitCount = 10; bitCount > 0 ; bitCount-- )
    {
      /* delay one bit 104 usec at 4 MHz       */
      /* 5+18*5-1+1+9=104 without optimization */ 
-     ti = 18; do ; while( --ti > 0); nop(); 
+     ti = 30; do ; while( --ti > 0); nop(); 
      Carry = 1;     /* stopbit                    */
      cipher = rr( cipher ); /* Rotate Right through Carry */
      PORTB.7 = Carry;
-   }
+	}
+	nop2();nop2();
   return;
 }
 
@@ -163,19 +164,18 @@ char getchar( void )  /* recieves one char, blocking */
    while( PORTB.7 == 1 ) /* wait for startbit */ ;
       /* delay 1,5 bit 156 usec at 4 MHz         */
       /* 5+28*5-1+1+2+9=156 without optimization */
-      ti = 28; do ; while( --ti > 0); nop(); nop2();
+      ti = 47; do ; while( --ti > 0); nop(); nop2();
    for( bitCount = 8; bitCount > 0 ; bitCount--)
        {
         Carry = PORTB.7;
         d_in = rr( d_in);  /* rotate carry */
          /* delay one bit 104 usec at 4 MHz       */
          /* 5+18*5-1+1+9=104 without optimization */ 
-         ti = 18; do ; while( --ti > 0); nop(); 
+         ti = 30; do ; while( --ti > 0); nop(); 
         }
-    TRISB.7 = 0;
-    PORTB.7 = 1; /* This side not ready for stream */
    return RSAcryptation(d_in);
 }
+
 
 void string_in( char * string ) 
 {

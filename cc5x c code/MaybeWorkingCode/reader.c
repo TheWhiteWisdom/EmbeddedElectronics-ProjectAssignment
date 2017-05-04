@@ -32,6 +32,7 @@ char getAmountFromUART();
 
 /* Borrowed and modified method's headers */
 bit check_password( char * input_string, const char * candidate_string );
+void OverrunRecover();
 void putcharUART( char );
 char getcharUART( void );
 void string_outUART( const char * string ); 
@@ -51,6 +52,7 @@ char superID;
 char phraseRequestNumber;
 bit refillModeEnabled;
 char refillAmount;
+char lightFrame;
 
 void main(){
     userID = 42;
@@ -60,6 +62,8 @@ void main(){
     refillModeEnabled = 0;
     refillAmount = 0;
     
+	lightFrame = 0;
+	
     initializeSerial();
     while(1){
         run();
@@ -68,17 +72,34 @@ void main(){
 
 void initializeSerial(){
     /* UART */
-        ANSEL.0 = 0; // No AD on RA0
-        ANSEL.1 = 0; // No AD on RA1
         PORTA.0 = 1; // marking line
         TRISA.0 = 0; // RA0 output
+		ANSEL.0 = 0; // No AD on RA0
         TRISA.1 = 1; // RA1 input
+		ANSEL.1 = 0; // No AD on RA1
     
     /* CARD */
-        PORTB.7 = 1; // marking line
-        TRISB.7 = 0; // RB7 output
-        TRISB.5 = 1; // RB5 input
-        TRISC.2 = 1; // RC2 input, Card present bit
+		TXEN = 1;
+		SYNC = 0;
+		TX9 = 0;
+		SPEN =1;
+		
+		BRGH = 0;
+		BRG16 = 1;
+		SPBRG = 25;
+		
+		CREN = 1;
+		RX9 = 0;
+		ANSELH.3 = 0;
+	
+       // PORTB.7 = 1; // marking line
+       // TRISB.7 = 0; // RB7 output
+       // TRISB.5 = 1; // RB5 input
+        TRISC.3 = 1; // RC3 input, Card present bit
+	    ANSEL.7 = 0; // RC3 digital input
+		TRISC.2 = 0; // LED OUT
+		PORTC.2 = 0;
+		
 }
 
 bit comparePhrase(char* in_phrase, bit userPhrase, char index){
@@ -110,10 +131,18 @@ bit comparePhrase(char* in_phrase, bit userPhrase, char index){
 	return 0;
 }
 
+void flashLight(){
+	lightFrame++;
+	if(lightFrame>=100){
+		lightFrame = 0;
+		PORTC.2 = !PORTC.2;
+	}
+}
+
 void run(){
-    if(PORTC.2 == 1){
+    if(PORTC.3 == 1){
         string_outUART("Remove card\r\n");
-        while(PORTC.2 == 1)nop();
+        while(PORTC.3 == 1)flashLight();
         delay10(80);
     }
     if(refillModeEnabled){
@@ -121,9 +150,15 @@ void run(){
     }
     else
         string_outUART("Insert card\r\n");
-    while(PORTC.2 == 0)nop();// wait for card to be present
+	OverrunRecover();
+    while(PORTC.3 == 0);//nop();// wait for card to be present
+	string_outUART("Card detected!\r\n");
+	OverrunRecover();
+	delay10(150);
+	delay10(50);
+	char ID = 'E';
     putcharCARD(Cmd_getID);
-    char ID = getcharCARD();
+    ID = getcharCARD();
     if(ID == userID){
             if(!refillModeEnabled){
                 string_outUART("User card detected!\r\n");
@@ -133,6 +168,9 @@ void run(){
                 if(!comparePhrase(phrase, 0, phraseRequestNumber)){
                     putcharCARD(Cmd_accessDenied);
                     string_outUART("ERROR: invalid card!\r\n");
+					string_outUART("Phrase gotten: ");
+					string_outUART(phrase);	
+					string_outUART("\r\n");
                     incrementPhraseRequestNumber();
                     return;
                 }
@@ -158,6 +196,9 @@ void run(){
                     putcharCARD(Cmd_accessDenied);
                     putcharCARD(Cmd_accessDenied);
                     string_outUART("ERROR: invalid card!\r\n");
+					string_outUART("Phrase gotten: ");
+					string_outUART(phrase);	
+					string_outUART("\r\n");
                     refillAmount = 0;
                     refillModeEnabled = 0;
                     return;
@@ -180,6 +221,9 @@ void run(){
             if(!comparePhrase(phrase, 0, phraseRequestNumber)){
                 putcharCARD(Cmd_accessDenied);
                 string_outUART("ERROR: invalid card!\r\n");
+				string_outUART("Phrase gotten: ");
+				string_outUART(phrase);	
+				string_outUART("\r\n");
                 refillAmount = 0;
                 refillModeEnabled = 0;
                 incrementPhraseRequestNumber();
@@ -193,6 +237,14 @@ void run(){
                 refillModeEnabled=0;
      }else{
             string_outUART("ERROR: invalid card!\r\n");
+			string_outUART("ID gotten: ");
+			putcharUART(ID);	
+			string_outUART("\r\n");
+			string_outUART("Valid IDs: ");
+			putcharUART(userID);	
+			string_outUART(" AND ");
+			putcharUART(superID);	
+			string_outUART("\r\n");
     }     
 }
 
@@ -213,7 +265,7 @@ char modpow(char val, char mod, char pow){
 }
 
 char RSAcryptation(char c){
-    return modpow(c, RSA_mod, RSA_key);
+    return c;//modpow(c, RSA_mod, RSA_key);
 }
 
 char getAmountFromUART(){
@@ -267,6 +319,14 @@ bit check_password( char * input_string, const char * candidate_string )
      }
 }
     
+void OverrunRecover(){
+	char trash;
+	trash = RCREG;
+	trash = RCREG;
+	CREN = 0;
+	CREN = 1;
+}
+	
 void putcharUART( char ch )  /* sends one char */
 {
   char bitCount, ti;
@@ -309,18 +369,8 @@ char getcharUART( void )  /* recieves one char, blocking */
 void putcharCARD( char ch )  /* sends one char */
 {
   char cipher = RSAcryptation(ch);
-  char bitCount, ti;
-  PORTB.7 = 0; /* set startbit */
-  while(PORTB.5 == 1) /* wait until card is ready to read */
-  for ( bitCount = 10; bitCount > 0 ; bitCount-- )
-   {
-     /* delay one bit 104 usec at 4 MHz       */
-     /* 5+18*5-1+1+9=104 without optimization */ 
-     ti = 18; do ; while( --ti > 0); nop(); 
-     Carry = 1;     /* stopbit                    */
-     cipher = rr( cipher ); /* Rotate Right through Carry */
-     PORTB.7 = Carry;
-   }
+  while(!TXIF); // Wait until previous character is transmitted
+  TXREG = cipher;
   return;
 }
 
@@ -329,24 +379,14 @@ void putcharCARD( char ch )  /* sends one char */
     ********************************************* */
 char getcharCARD( void )  /* recieves one char, blocking */
 {
-    PORTB.7 = 0; /* This side ready for stream */
-   /* One start bit, one stop bit, 8 data bit, no parity = 10 bit. */
-   /* Baudrate: 9600 baud => 104.167 usec. per bit.                */
-   char d_in, bitCount, ti;
-   while( PORTB.5 == 1 ) /* wait for startbit */ ;
-      /* delay 1,5 bit 156 usec at 4 MHz         */
-      /* 5+28*5-1+1+2+9=156 without optimization */
-      ti = 28; do ; while( --ti > 0); nop(); nop2();
-   for( bitCount = 8; bitCount > 0 ; bitCount--)
-       {
-        Carry = PORTB.5;
-        d_in = rr( d_in);  /* rotate carry */
-         /* delay one bit 104 usec at 4 MHz       */
-         /* 5+18*5-1+1+9=104 without optimization */ 
-         ti = 18; do ; while( --ti > 0); nop(); 
-        }
-   PORTB.7 = 1; /* This side not ready for stream */
-   return RSAcryptation(d_in);
+	char d_in = 'E';
+	while( !RCIF && PORTC.3 );
+	if(!RCIF){ 
+		string_outUART("ERROR: Card ejected before completion!\r\n");
+		return d_in;
+	}
+	d_in = RCREG;
+	return RSAcryptation(d_in);
 }
 
 void string_inUART( char * string ) 
@@ -374,6 +414,7 @@ void string_outUART(const char * string)
      if( k == '\0') return;   /* found end of string */
      putcharUART(k); 
    }
+  OverrunRecover();
   return;
 }
 
