@@ -4,10 +4,8 @@
 
 #include "16F690.h"
 #pragma config |= 0x00D4
-#define MAX_STRING 31 /* string input max 30 characters */
 
-#define RSA_key 17
-#define RSA_mod 187
+#define MAX_STRING 31 /* string input max 30 characters */
 
 /* Function prototypes */
 void communicationSequence( void );
@@ -20,13 +18,17 @@ char getchar_eedata( char );
 void OverrunRecover(void);
 void string_in( char * ); /* no extra echo, local echo by connection */
 void string_out( const char * string );
-bit check_password( char * input_string, const char * candidate_string );
+bit check_candidate( char * input_string, const char * candidate_string );
 void delay( char );
 
 char address;
 
 void main( void)
 {
+	delay(250); // Extra time to start the display
+	delay(250);
+	delay(250);
+	
    TRISA.0 = 1; /* RA0 not to disturb PK2 UART Tool */
    ANSEL.0 = 0; /* RA0 digital input */
    TRISA.1 = 1; /* RA1 not to disturb PK2 UART Tool */
@@ -38,6 +40,9 @@ void main( void)
    TRISC.2 = 0;  /* RC2 lock (lightdiode) is output */
    PORTC.2 = 0;  /* RC2 initially locked            */
 	address = 0x52;
+	putchar_eedata( 0, address );
+	
+	
 	communicationSequence();
 }
 
@@ -85,13 +90,13 @@ char getAndComparePhrase(char index){
        /* Compare the answer string with the correct answer for master card */
 	   switch(index){
 			case 0:
-				compare = check_password( &input_string[0], "1. me, the master card" );
+				compare = check_candidate( &input_string[0], "1. me, the master card" );
 				break;
 			case 1:
-				compare = check_password( &input_string[0], "2. me, the master card" );
+				compare = check_candidate( &input_string[0], "2. me, the master card" );
 				break;
 			default:
-				compare = check_password( &input_string[0], "3. me, the master card" );
+				compare = check_candidate( &input_string[0], "3. me, the master card" );
 	   }
 	   if(compare == 1){
 			return 'M';
@@ -99,13 +104,13 @@ char getAndComparePhrase(char index){
 	   /* Compare the answer string with the correct answer for user card */
 	   switch(index){
 			case 0:
-				compare = check_password( &input_string[0], "1. me, the user card" );
+				compare = check_candidate( &input_string[0], "1. me, the customer card" );
 				break;
 			case 1:
-				compare = check_password( &input_string[0], "2. me, the user card" );
+				compare = check_candidate( &input_string[0], "2. me, the customer card" );
 				break;
 			default:
-				compare = check_password( &input_string[0], "3. me, the user card" );
+				compare = check_candidate( &input_string[0], "3. me, the customer card" );
 	   }
 	   if(compare == 1){
 			return 'C';
@@ -143,35 +148,55 @@ void communicationSequence(){
 			OverrunRecover();
 			string_in( &input_string[0] ); // Read PIN (card does stuff with it)
 			delay(100);
+			OverrunRecover();
 			string_in( &input_string[0] ); // Read response from card
-			compare = check_password( &input_string[0], "PIN OK" );
+			compare = check_candidate( &input_string[0], "PIN OK" );
+			OverrunRecover();
 			if(compare == 0 ){
-				PORTC.2=1;
-				OverrunRecover();
-				string_out(&input_string[0]); // TODO: FIX THIS, Compare == 0 if PIN OK and wont print.
+				if(refillMode){
+					refillMode = 0;
+					OverrunRecover();
+					delay(100);  /* extra delay */ 
+					string_out("Refill mode disabled\r\n");
+					OverrunRecover();
+					delay(200);  /* extra delay */ 
+				}
 			}
-			if(compare == 1 && user == 'M'){
-				PORTC.2=1;
+			else if(compare == 1 && user == 'M'){
 				refillMode = !refillMode;
-				OverrunRecover();
-				if(refillMode == 1)
-					string_out( "Insert customer card to refill\r\n" );
+				delay(100);
+				if(refillMode == 1){
+					string_out("Refill mode enabled\r\n");
+				}
 				else
-					string_out("Refill canceled!\r\n");
+					string_out("Refill mode disabled\r\n");
 			}
-			else if(compare == 1 && user == 'U'){
+			else if(compare == 1 && user == 'C'){
 				char accesses = getchar_eedata( address );
 				if(refillMode == 1){
 					putchar_eedata( accesses+2, address );
-					printf("Refill done! Number of accesses: %d", accesses+2);
+					string_out("Refill done! \r");
+					delay(50);
+					OverrunRecover();
+					printf("Number of accesses: %d\n", accesses+2);
+					delay(50);
+					OverrunRecover();
 				}
 				else if(accesses > 0){
 					putchar_eedata( accesses-1, address );
-					printf("Welcome! Number of accesses: %d", accesses-1);
+					string_out("Welcome! \r");
+					delay(50);
+					OverrunRecover();
+					printf("Number of accesses: %d\n", accesses-1);
+					delay(50);
+					OverrunRecover();
 					PORTC.2 = 1;
 				}
-				else
-					string_out("No accesses left!");
+				else{
+						delay(50);
+						OverrunRecover();
+						string_out("No accesses left!\r\n");
+					}
 				refillMode = 0;
 			}
 	   }
@@ -179,7 +204,6 @@ void communicationSequence(){
 			string_out("Invalid card!\r\n");
 			
         OverrunRecover();
-
        delay(100);  /* extra delay */ 
 		if(PORTC.3 == 1)
 			string_out("Remove card!\r\n");
@@ -191,7 +215,6 @@ void communicationSequence(){
        delay(150);   /* card debounce */
 	}
 }
-
 /********************
      Borrowed FUNCTIONS
      =========
@@ -265,12 +288,12 @@ void string_out(const char * string )
    {
      k = string[i];
      if( k == '\0') return;   /* found end of string */
-     putchar(k); 
+     putchar(k);
    }
   return;
 }
 
-bit check_password( char * input_string, const char * candidate_string )
+bit check_candidate( char * input_string, const char * candidate_string )
 {
    /* compares input with the candidate string */
    char i, c, d;

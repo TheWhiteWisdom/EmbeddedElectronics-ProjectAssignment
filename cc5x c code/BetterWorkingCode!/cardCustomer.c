@@ -70,11 +70,11 @@ void communicationSequence(){
     delay(100);     /* extra time. 255 maximum */
 
    if(compare1 == 1)
-     string_out("1. me, the master card\r\n");  /* Observe '\r' */
+     string_out("1. me, the customer card\r\n");  /* Observe '\r' */
 	if(compare2 == 1)
-		string_out("2. me, the master card\r\n");
+		string_out("2. me, the customer card\r\n");
 	if(compare3 == 1)
-		string_out("3. me, the master card\r\n");
+		string_out("3. me, the customer card\r\n");
 	
 	string_in( &input_string[0] );
 	if(check_candidate( &input_string[0], "Enter PIN:" )){
@@ -86,7 +86,7 @@ void communicationSequence(){
 	
 	delay(150);     /* give the lock time to get ready */
 	
-	if(check_candidate( &input_string[0], "1234" )){
+	if(check_candidate( &input_string[0], "4321" )){
 		string_out("PIN OK\r\n");
 	}
 	else
